@@ -1,0 +1,46 @@
+import serial
+import time
+import psutil
+
+# KONFIGURASI PORT USB
+# Cek port Arduino Anda. Biasanya '/dev/ttyACM0' atau '/dev/ttyUSB0'
+# Cara cek: cabut colok usb arduino, ketik "ls /dev/tty*" di terminal
+SERIAL_PORT = '/dev/ttyACM0' 
+BAUD_RATE = 9600
+
+try:
+    ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
+    ser.flush()
+    print(f"Terhubung ke Arduino di {SERIAL_PORT}")
+except:
+    print("Gagal koneksi! Cek port USB atau kabel.")
+    exit()
+
+print("Mengirim data... (Tekan Ctrl+C untuk stop)")
+
+while True:
+    try:
+        # 1. Ambil Data Sistem
+        cpu = int(psutil.cpu_percent(interval=None))
+        ram = int(psutil.virtual_memory().percent)
+        
+        # 2. Format Pesan: "CPU,RAM\n"
+        # \n (newline) penting agar Arduino tahu pesan sudah selesai
+        data_to_send = f"{cpu},{ram}\n"
+        
+        # 3. Kirim ke Arduino
+        ser.write(data_to_send.encode('utf-8'))
+        
+        # Tampilkan di terminal Pi untuk debugging
+        print(f"Sent: CPU {cpu}% | RAM {ram}%")
+        
+        # Update setiap 2 detik
+        time.sleep(2)
+        
+    except KeyboardInterrupt:
+        print("Berhenti.")
+        ser.close()
+        break
+    except Exception as e:
+        print(f"Error: {e}")
+        time.sleep(1)
