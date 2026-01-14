@@ -1,46 +1,85 @@
 import serial
 import time
 import psutil
+import requests
+from datetime import datetime
 
-# KONFIGURASI PORT USB
-# Cek port Arduino Anda. Biasanya '/dev/ttyACM0' atau '/dev/ttyUSB0'
-# Cara cek: cabut colok usb arduino, ketik "ls /dev/tty*" di terminal
-SERIAL_PORT = '/dev/ttyACM0' 
+# --- KONFIGURASI ---
+SERIAL_PORT = '/dev/ttyACM0'  # Cek lagi port Arduino Anda
 BAUD_RATE = 9600
 
+# Setting Lokasi (Contoh: Jakarta Pusat)
+# Cari Latitude/Longitude kota Anda di Google Maps
+LATITUDE = -6.186
+LONGITUDE = 106.834
+CITY_NAME = "Jkt" # Singkat saja agar muat di LCD (Maks 16 karakter)
+
+def get_weather():
+    try:
+        # Menggunakan API Open-Meteo (Gratis, No Key)
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={LATITUDE}&longitude={LONGITUDE}&current_weather=true&timezone=auto"
+        response = requests.get(url, timeout=5)
+        data = response.json()
+        
+        temp = data['current_weather']['temperature']
+        code = data['current_weather']['weathercode']
+        
+        # Terjemahkan kode cuaca sederhana
+        condition = "Cerah"
+        if code > 3: condition = "Berawan"
+        if code > 50: condition = "Hujan"
+        if code > 90: condition = "Badai"
+        
+        return f"{temp}C {condition}"
+    except:
+        return "Offline"
+
+# Setup Serial
 try:
     ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
     ser.flush()
-    print(f"Terhubung ke Arduino di {SERIAL_PORT}")
+    print("Terhubung ke Arduino...")
 except:
-    print("Gagal koneksi! Cek port USB atau kabel.")
+    print("Gagal koneksi Serial! Cek kabel.")
     exit()
 
-print("Mengirim data... (Tekan Ctrl+C untuk stop)")
+print("Dashboard berjalan... Tekan Ctrl+C untuk stop.")
 
 while True:
     try:
-        # 1. Ambil Data Sistem
+        # --- MODE 1: INFO PC (Tampil selama 5 detik) ---
         cpu = int(psutil.cpu_percent(interval=None))
         ram = int(psutil.virtual_memory().percent)
         
-        # 2. Format Pesan: "CPU,RAM\n"
-        # \n (newline) penting agar Arduino tahu pesan sudah selesai
-        data_to_send = f"{cpu},{ram}\n"
+        # Tentukan Warna LED (0=Hijau, 1=Merah jika CPU > 80%)
+        led_status = 1 if cpu > 80 else 0
         
-        # 3. Kirim ke Arduino
-        ser.write(data_to_send.encode('utf-8'))
+        # Format: STATUS|BARIS1|BARIS2
+        msg_pc = f"{led_status}|CPU: {cpu}% RAM: {ram}%|System Healthy"
+        ser.write((msg_pc + "\n").encode('utf-8'))
         
-        # Tampilkan di terminal Pi untuk debugging
-        print(f"Sent: CPU {cpu}% | RAM {ram}%")
+        time.sleep(5) # Tahan tampilan ini 5 detik
         
-        # Update setiap 2 detik
-        time.sleep(2)
+        # --- MODE 2: INFO INTERNET (Tampil selama 5 detik) ---
+        # Ambil Waktu
+        now = datetime.now()
+        current_time = now.strftime("%H:%M") # Format Jam:Menit
+        date_str = now.strftime("%d/%m")     # Format Tgl/Bln
+        
+        # Ambil Cuaca
+        weather_info = get_weather()
+        
+        # Format pesan
+        # Baris 1: Jam dan Tanggal
+        # Baris 2: Nama Kota dan Cuaca
+        msg_web = f"0|{current_time} WIB  {date_str}|{CITY_NAME}: {weather_info}"
+        ser.write((msg_web + "\n").encode('utf-8'))
+        
+        time.sleep(5) # Tahan tampilan ini 5 detik
         
     except KeyboardInterrupt:
-        print("Berhenti.")
-        ser.close()
+        print("Selesai.")
         break
     except Exception as e:
         print(f"Error: {e}")
-        time.sleep(1)
+        time.sleep(2)
