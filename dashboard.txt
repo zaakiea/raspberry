@@ -8,11 +8,10 @@ from datetime import datetime
 SERIAL_PORT = '/dev/ttyACM0'  # Cek lagi port Arduino Anda
 BAUD_RATE = 9600
 
-# Setting Lokasi (Contoh: Jakarta Pusat)
-# Cari Latitude/Longitude kota Anda di Google Maps
-LATITUDE = -6.186
-LONGITUDE = 106.834
-CITY_NAME = "Jkt" # Singkat saja agar muat di LCD (Maks 16 karakter)
+
+LATITUDE = -7.4287
+LONGITUDE = 109.4336
+CITY_NAME = "Bukateja"
 
 def get_weather():
     try:
@@ -26,7 +25,7 @@ def get_weather():
         
         # Terjemahkan kode cuaca sederhana
         condition = "Cerah"
-        if code > 3: condition = "Berawan"
+        if code > 3: condition = "Mendung" # Ganti "Berawan" jadi "Mendung" (lebih pendek)
         if code > 50: condition = "Hujan"
         if code > 90: condition = "Badai"
         
@@ -83,3 +82,4 @@ while True:
     except Exception as e:
         print(f"Error: {e}")
         time.sleep(2)
+
