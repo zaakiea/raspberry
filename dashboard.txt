@@ -4,87 +4,110 @@ import psutil
 import requests
 from datetime import datetime
 
-# --- SETTING LOKASI (Kec. Bukateja, Purbalingga) ---
+# ==================================================
+# SETTING LOKASI (Bukateja, Purbalingga)
+# ==================================================
 LAT = -7.4287
 LON = 109.4336
-NAMA_KOTA = "Bukateja" # Singkat agar muat di layar
+NAMA_KOTA = "Bukateja"
 
-# --- KONEKSI ARDUINO ---
-# Coba /dev/ttyACM0 dulu, kalau gagal script akan coba ttyUSB0
-PORT = '/dev/ttyACM0' 
+# ==================================================
+# SETTING SERIAL ARDUINO
+# ==================================================
+BAUDRATE = 9600
+PORTS = ['/dev/ttyACM0', '/dev/ttyUSB0']
 
 def connect_arduino():
-    try:
-        return serial.Serial(PORT, 9600, timeout=1)
-    except:
+    for port in PORTS:
         try:
-            return serial.Serial('/dev/ttyUSB0', 9600, timeout=1)
+            ser = serial.Serial(port, BAUDRATE, timeout=1)
+            print(f"Arduino terhubung di {port}")
+            return ser
         except:
-            return None
+            pass
+    return None
 
+# ==================================================
+# AMBIL DATA CUACA (OPEN-METEO)
+# ==================================================
 def get_cuaca():
     try:
-        # Mengambil data dari Open-Meteo (Gratis)
-        url = f"https://api.open-meteo.com/v1/forecast?latitude={LAT}&longitude={LON}&current_weather=true&timezone=auto"
+        url = (
+            "https://api.open-meteo.com/v1/forecast"
+            f"?latitude={LAT}&longitude={LON}"
+            "&current_weather=true&timezone=auto"
+        )
+
         r = requests.get(url, timeout=5)
+        r.raise_for_status()   # Jika API error, langsung ketahuan
         data = r.json()
-        
-        temp = data['current_weather']['temperature']
+
+        temp = int(data['current_weather']['temperature'])
         code = data['current_weather']['weathercode']
-        
-        # Terjemahkan kode cuaca
-        status = "Cerah"
-        if code > 3: status = "Mendung"
-        if code > 50: status = "Hujan"
-        if code > 80: status = "Badai"
-        
+
+        if code <= 3:
+            status = "Cerah"
+        elif code <= 50:
+            status = "Mendung"
+        elif code <= 80:
+            status = "Hujan"
+        else:
+            status = "Badai"
+
         return f"{temp}C {status}"
-    except:
+
+    except Exception as e:
+        print("ERROR CUACA:", e)
         return "Offline"
 
-# --- PROGRAM UTAMA ---
-print("Memulai Dashboard Bukateja...")
-ser = connect_arduino()
+# ==================================================
+# PROGRAM UTAMA
+# ==================================================
+print("=== Dashboard Bukateja ===")
 
+ser = connect_arduino()
 if not ser:
-    print("Error: Arduino tidak terdeteksi! Cek Kabel USB.")
+    print("ERROR: Arduino tidak terdeteksi! Cek kabel USB.")
     exit()
 
-time.sleep(2) # Tunggu Arduino siap
+time.sleep(2)  # Tunggu Arduino siap
 
 while True:
     try:
-        # === SLIDE 1: STATUS KOMPUTER (Tampil 5 Detik) ===
-        cpu = int(psutil.cpu_percent(interval=None))
+        # ------------------------------------------
+        # SLIDE 1: STATUS KOMPUTER (5 DETIK)
+        # ------------------------------------------
+        cpu = int(psutil.cpu_percent())
         ram = int(psutil.virtual_memory().percent)
-        
-        # Jika CPU > 80%, Lampu jadi Merah (Kode 1), jika tidak Hijau (Kode 0)
+
+        # LED merah jika CPU > 80%
         warn = 1 if cpu > 80 else 0
-        
-        # Kirim: WARNA|BARIS1|BARIS2
-        msg1 = f"{warn}|CPU: {cpu}%  RAM: {ram}%|System Monitor"
-        ser.write((msg1 + "\n").encode('utf-8'))
-        
+
+        # FORMAT: WARNA|BARIS1|BARIS2
+        msg1 = f"{warn}|CPU: {cpu}% RAM: {ram}%|System Monitor"
+        ser.write((msg1 + "\n").encode())
+
         time.sleep(5)
-        
-        # === SLIDE 2: INFO BUKATEJA (Tampil 5 Detik) ===
+
+        # ------------------------------------------
+        # SLIDE 2: INFO WAKTU & CUACA (5 DETIK)
+        # ------------------------------------------
         now = datetime.now()
         jam = now.strftime("%H:%M")
         tgl = now.strftime("%d/%m")
         cuaca = get_cuaca()
-        
-        # Format Layar:
-        # Baris 1: 14:00 WIB 14/01
-        # Baris 2: Bukateja: 28C Hujan
-        msg2 = f"0|{jam} WIB  {tgl}|{NAMA_KOTA}: {cuaca}"
-        ser.write((msg2 + "\n").encode('utf-8'))
-        
+
+        msg2 = f"0|{jam} WIB {tgl}|{NAMA_KOTA}: {cuaca}"
+        ser.write((msg2 + "\n").encode())
+
         time.sleep(5)
 
     except KeyboardInterrupt:
-        print("Stop.")
+        print("\nProgram dihentikan.")
         break
+
     except Exception as e:
-        print(f"Error: {e}")
-        # Coba reconnect jika putus
+        print("ERROR:", e)
+        print("Mencoba reconnect Arduino...")
         ser = connect_arduino()
+        time.sleep(2)
