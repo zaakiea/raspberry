@@ -4,7 +4,7 @@ import psutil
 import requests
 from datetime import datetime
 
-# --- KONFIGURASI ---
+
 SERIAL_PORT = '/dev/ttyACM0'  # Cek lagi port Arduino Anda
 BAUD_RATE = 9600
 
@@ -15,7 +15,6 @@ CITY_NAME = "Bukateja"
 
 def get_weather():
     try:
-        # Menggunakan API Open-Meteo (Gratis, No Key)
         url = f"https://api.open-meteo.com/v1/forecast?latitude={LATITUDE}&longitude={LONGITUDE}&current_weather=true&timezone=auto"
         response = requests.get(url, timeout=5)
         data = response.json()
@@ -23,7 +22,6 @@ def get_weather():
         temp = data['current_weather']['temperature']
         code = data['current_weather']['weathercode']
         
-        # Terjemahkan kode cuaca sederhana
         condition = "Cerah"
         if code > 3: condition = "Mendung" # Ganti "Berawan" jadi "Mendung" (lebih pendek)
         if code > 50: condition = "Hujan"
@@ -33,7 +31,6 @@ def get_weather():
     except:
         return "Offline"
 
-# Setup Serial
 try:
     ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
     ser.flush()
@@ -60,17 +57,12 @@ while True:
         time.sleep(5) # Tahan tampilan ini 5 detik
         
         # --- MODE 2: INFO INTERNET (Tampil selama 5 detik) ---
-        # Ambil Waktu
         now = datetime.now()
         current_time = now.strftime("%H:%M") # Format Jam:Menit
         date_str = now.strftime("%d/%m")     # Format Tgl/Bln
         
-        # Ambil Cuaca
         weather_info = get_weather()
         
-        # Format pesan
-        # Baris 1: Jam dan Tanggal
-        # Baris 2: Nama Kota dan Cuaca
         msg_web = f"0|{current_time} WIB  {date_str}|{CITY_NAME}: {weather_info}"
         ser.write((msg_web + "\n").encode('utf-8'))
         
@@ -82,4 +74,5 @@ while True:
     except Exception as e:
         print(f"Error: {e}")
         time.sleep(2)
+
 
